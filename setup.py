@@ -30,14 +30,14 @@ setup(
     ],
     keywords="PNN, Taylor, ODE, TensorFlow",
     packages=find_packages(),
-    python_requires=">=3.9, <4",
+    python_requires=">=3.9, <3.12",
     install_requires=[
-        "tensorflow>=2.8,<2.12",
-        "scipy>=1.6,<1.11",
-        "numpy>=1.20,<1.24",
-        "sympy~=1.8",
-        "numba>=0.55,<0.57",
-    ],
+    "tensorflow>=2.12.0", 
+    "scipy>=1.10.0",   
+    "numpy>=1.24.0",      
+    "sympy>=1.11.0",  
+    "numba>=0.57.0", 
+],,
     #   $ pip install tmflow[examples]
     extras_require={
         "examples": [
