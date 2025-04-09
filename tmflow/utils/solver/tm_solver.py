@@ -49,32 +49,6 @@ class TMSolver:
         with open(path, 'rb') as weights_pkl:
             self.weights = pickle.load(weights_pkl)
 
-    def torch_integrate(self, y0: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        """
-        Новый интерфейс, совместимый с torchdiffeq.odeint
-        
-        Parameters:
-            y0: torch.Tensor shape (d,) или (b, d) для батча
-            t: torch.Tensor shape (T,) временные точки
-            
-        Returns:
-            torch.Tensor shape (T, d) или (b, T, d)
-        """
-        # Конвертируем torch -> numpy
-        y0_np = y0.detach().cpu().numpy()
-        t_np = t.detach().cpu().numpy()
-        
-        # Вычисляем решение (используем существующий метод)
-        solution_np = run_tm_solver(y0_np, t_np, self)
-        
-        # Конвертируем обратно в torch
-        solution = torch.from_numpy(solution_np).to(y0.device)
-        
-        # Добавляем поддержку батчей если нужно
-        if y0.ndim == 2:
-            solution = solution.permute(1, 0, 2)  # (batch, time, dim)
-            
-        return solution
 
 
 @njit
@@ -140,22 +114,44 @@ def run_tm_solver(ini_vals: list, time_grid: np.array, config: TMSolver) -> np.a
 
     return numerical_solution
 
+
+def torch_integrate(solver: TMSolver, y0: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    """
+    Новый интерфейс для работы с torch.Tensor
+    
+    Parameters:
+        solver: экземпляр TMSolver
+        y0: начальные условия (torch.Tensor)
+        t: временные точки (torch.Tensor)
+    """
+    # Конвертация torch -> numpy
+    y0_np = y0.detach().cpu().numpy()
+    t_np = t.detach().cpu().numpy()
+    
+    # Используем существующий решатель
+    solution_np = run_tm_solver(y0_np, t_np, solver)
+    
+    # Конвертация обратно в torch
+    solution = torch.from_numpy(solution_np).to(y0.device)
+    
+    return solution
+
 def odeint(func, y0, t, method='tmsolver', options=None):
     """
     Интерфейс, совместимый с torchdiffeq.odeint
     
     Parameters:
-        func: Пока не используется, оставлен для совместимости
-        y0: Начальные условия (torch.Tensor)
-        t: Временные точки (torch.Tensor)
-        options: Должен содержать параметры для TMSolver:
+        func: функция ODE (пока не используется, оставлен для совместимости)
+        y0: начальные условия (torch.Tensor)
+        t: временные точки (torch.Tensor)
+        options: должен содержать параметры для TMSolver:
             - order: порядок метода
-            - ode_rhs: правые части ОДУ
-            - map_step: шаг
             - ode_dim: размерность системы
+            - ode_rhs: правые части ОДУ
+            - map_step: шаг интегрирования
     """
     if options is None:
-        options = {}
+        raise ValueError("Для TMSolver необходимо указать options")
     
     solver = TMSolver(
         order=options.get('order', 4),
@@ -165,4 +161,4 @@ def odeint(func, y0, t, method='tmsolver', options=None):
         calc_weights=True
     )
     
-    return solver.torch_integrate(y0, t)
+    return torch_integrate(solver, y0, t)
