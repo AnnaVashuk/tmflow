@@ -216,12 +216,6 @@ def __generate_tm_ode(dim: int, order: int, P_matrix_array: Union[Tuple[Matrix],
                       sym_params=None) -> Tuple[Callable, int]:
     """
     Generates function of tm_ode r.h.s.
-
-    :param dim: system dimension
-    :param order: required order of nonlinearity of TM
-    :param P_matrix_array: array of matrices P_i from original ODE polynomial r.h.s.
-    :param sym_params: possible symbolic parameters in the original ODE system (to be substituted later default = None)
-    :return: and total number of variable in all matrices
     """
     R = [Matrix(MatrixSymbol('R' + str(i), dim,
                              int(math.factorial(dim + i-1)//(math.factorial(i)*math.factorial(dim-1)))))
@@ -232,6 +226,7 @@ def __generate_tm_ode(dim: int, order: int, P_matrix_array: Union[Tuple[Matrix],
     R_array = [r for r in R]
     X_array = [X]
     cron_X = X
+    
     for i in range(1, order):
         cron_X = tensor_product(__delete_rows_vector(cron_X), X)
         X_array.append(cron_X)
@@ -239,11 +234,19 @@ def __generate_tm_ode(dim: int, order: int, P_matrix_array: Union[Tuple[Matrix],
     before_del_cron_X = X_array
     cron_R = R_array
     before_del_cron_R = R_array
-    W = [P_matrix_array[0] * r for r in cron_R]
+    
+    # Исправленное умножение матриц
+    W = [P_matrix_array[0] * r if isinstance(P_matrix_array[0], Matrix) 
+         else Matrix(P_matrix_array[0]).multiply(r) 
+         for r in cron_R]
 
     assert dim > 1, "Only an ODE system with 2 or more equations is supported at the moment"
+    
     for idx, p in enumerate(P_matrix_array):
-        R_line = [p * r for r in cron_R]
+        # Исправленное умножение для числовых матриц
+        p_matrix = p if isinstance(p, Matrix) else Matrix(p)
+        R_line = [p_matrix.multiply(r) for r in cron_R]
+        
         if idx != 0:
             for idw, w in enumerate(W):
                 for r in R_line:
@@ -251,21 +254,27 @@ def __generate_tm_ode(dim: int, order: int, P_matrix_array: Union[Tuple[Matrix],
                         W[idw] += r
 
         if idx + 1 != len(P_matrix_array):
-            before_del_cron_X = __truncated_maps_tensor_product(before_del_cron_X,
-                                                                X_array,
-                                                                sub_A_orders=sup_matrix,
-                                                                sub_B_orders=sup_base_matrix,
-                                                                max_order=order)
+            before_del_cron_X = __truncated_maps_tensor_product(
+                before_del_cron_X,
+                X_array,
+                sub_A_orders=sup_matrix,
+                sub_B_orders=sup_base_matrix,
+                max_order=order
+            )
 
-            before_del_cron_R = __truncated_maps_tensor_product(before_del_cron_R,
-                                                                R_array,
-                                                                sub_A_orders=sup_matrix,
-                                                                sub_B_orders=sup_base_matrix,
-                                                                max_order=order)
+            before_del_cron_R = __truncated_maps_tensor_product(
+                before_del_cron_R,
+                R_array,
+                sub_A_orders=sup_matrix,
+                sub_B_orders=sup_base_matrix,
+                max_order=order
+            )
 
-            sup_matrix = __next_sup_matrix(s_m=sup_matrix,
-                                           b_s_m=sup_base_matrix,
-                                           max_order=order)
+            sup_matrix = __next_sup_matrix(
+                s_m=sup_matrix,
+                b_s_m=sup_base_matrix,
+                max_order=order
+            )
 
             cron_X = [x.copy() for x in before_del_cron_X]
             cron_R = [r.copy() for r in before_del_cron_R]
@@ -274,8 +283,7 @@ def __generate_tm_ode(dim: int, order: int, P_matrix_array: Union[Tuple[Matrix],
             cron_R = __delete_rows_tensor_product(cron_R, before_del_cron_X[0])
 
     return __mapping_lambdify(order, W, R, sym_params)
-
-
+                        
 def __solve_tm_ode(x0: float, x1: float, variable_count: int, dim: int, tm_ode_rhs: any, symbolic_values=None) -> npt.ArrayLike:
     """
     Integrates tm_ode at time interval `[x0,x1]`
