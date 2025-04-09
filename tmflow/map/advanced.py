@@ -1,3 +1,5 @@
+from .tm import TMSolver as BaseTMSolver
+
 class TMSolver:
     def __init__(self, func, order=4, dtype=torch.float64, device='cpu'):
         """
