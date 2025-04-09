@@ -5,6 +5,8 @@ from numba import njit
 
 import pickle
 
+import torch
+
 from tmflow.map import construct_tm_matrices
 from tmflow.utils.weights import combine_weight_matrices
 
