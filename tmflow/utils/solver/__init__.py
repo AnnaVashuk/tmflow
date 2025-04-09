@@ -3,7 +3,8 @@ from .tm_solver import (
     run_tm_solver,
     calc_numerical_solution,
     get_next_point,
-    odeint  # обязательно добавьте это
+    odeint,
+    torch_integrate
 )
 
 __all__ = [
@@ -11,5 +12,6 @@ __all__ = [
     'run_tm_solver',
     'calc_numerical_solution',
     'get_next_point',
-    'odeint'  # и здесь
+    'odeint',
+    'torch_integrate'
 ]
