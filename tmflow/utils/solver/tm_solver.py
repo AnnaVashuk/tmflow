@@ -136,23 +136,13 @@ def torch_integrate(solver: TMSolver, y0: torch.Tensor, t: torch.Tensor) -> torc
     
     return solution
 
-def odeint(func, y0, t, method='tmsolver', options=None):
+def tmsolver_odeint(func=None, y0=None, t=None, method='tmsolver', options=None):
     """
     Интерфейс, совместимый с torchdiffeq.odeint
-    
-    Parameters:
-        func: функция ODE (пока не используется, оставлен для совместимости)
-        y0: начальные условия (torch.Tensor)
-        t: временные точки (torch.Tensor)
-        options: должен содержать параметры для TMSolver:
-            - order: порядок метода
-            - ode_dim: размерность системы
-            - ode_rhs: правые части ОДУ
-            - map_step: шаг интегрирования
     """
     if options is None:
-        raise ValueError("Для TMSolver необходимо указать options")
-    
+        raise ValueError("Необходимо указать options для TMSolver")
+        
     solver = TMSolver(
         order=options.get('order', 4),
         ode_dim=options['ode_dim'],
@@ -161,4 +151,12 @@ def odeint(func, y0, t, method='tmsolver', options=None):
         calc_weights=True
     )
     
-    return torch_integrate(solver, y0, t)
+    # Конвертация torch -> numpy
+    y0_np = y0.detach().cpu().numpy()
+    t_np = t.detach().cpu().numpy()
+    
+    # Вычисление решения
+    solution_np = run_tm_solver(y0_np, t_np, solver)
+    
+    # Конвертация обратно в torch
+    return torch.from_numpy(solution_np).to(y0.device)
