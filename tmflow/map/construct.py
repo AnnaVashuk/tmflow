@@ -215,11 +215,13 @@ def __mapping_lambdify(order: int, R_rhs: Union[List[Matrix], List[npt.ArrayLike
 def __generate_tm_ode(dim: int, order: int, P_matrix_array: Union[Tuple[Matrix], Tuple[npt.ArrayLike]],
                       sym_params=None) -> Tuple[Callable, int]:
     """
-    Generates function of tm_ode r.h.s.
+    Generates function of tm_ode r.h.s. with fixed matrix operations
     """
+    # Initialize symbolic matrices R and X
     R = [Matrix(MatrixSymbol('R' + str(i), dim,
-                             int(math.factorial(dim + i-1)//(math.factorial(i)*math.factorial(dim-1)))))
+                int(math.factorial(dim + i-1)//(math.factorial(i)*math.factorial(dim-1))))
          for i in range(1, order+1)]
+    
     X = Matrix(MatrixSymbol('X', dim, 1))
     sup_base_matrix = [i for i in range(1, order + 1, 1)]
     sup_matrix = sup_base_matrix.copy()
@@ -227,6 +229,7 @@ def __generate_tm_ode(dim: int, order: int, P_matrix_array: Union[Tuple[Matrix],
     X_array = [X]
     cron_X = X
     
+    # Build X tensor products
     for i in range(1, order):
         cron_X = tensor_product(__delete_rows_vector(cron_X), X)
         X_array.append(cron_X)
@@ -235,25 +238,52 @@ def __generate_tm_ode(dim: int, order: int, P_matrix_array: Union[Tuple[Matrix],
     cron_R = R_array
     before_del_cron_R = R_array
     
-    # Исправленное умножение матриц
-    W = [P_matrix_array[0] * r if isinstance(P_matrix_array[0], Matrix) 
-         else Matrix(P_matrix_array[0]).multiply(r) 
-         for r in cron_R]
+    # FIXED MATRIX MULTIPLICATION
+    W = []
+    for r in cron_R:
+        if isinstance(P_matrix_array[0], Matrix):
+            # For symbolic matrices
+            if P_matrix_array[0].shape[1] != r.shape[0]:
+                raise ValueError(f"Matrix shape mismatch: {P_matrix_array[0].shape} vs {r.shape}")
+            W.append(P_matrix_array[0] * r)
+        else:
+            # For numeric arrays
+            p_matrix = Matrix(P_matrix_array[0])
+            if p_matrix.shape[1] != r.shape[0]:
+                p_matrix = p_matrix.T  # Auto-transpose if needed
+            if p_matrix.shape[1] != r.shape[0]:
+                raise ValueError(f"Cannot multiply matrices with shapes {p_matrix.shape} and {r.shape}")
+            W.append(p_matrix.multiply(r))
 
-    assert dim > 1, "Only an ODE system with 2 or more equations is supported at the moment"
-    
+    # Verify system dimension
+    if dim <= 1:
+        raise ValueError("Only ODE systems with dimension >1 are supported")
+
+    # Main tensor product calculation loop
     for idx, p in enumerate(P_matrix_array):
-        # Исправленное умножение для числовых матриц
-        p_matrix = p if isinstance(p, Matrix) else Matrix(p)
-        R_line = [p_matrix.multiply(r) for r in cron_R]
-        
+        # Process each P matrix
+        if isinstance(p, Matrix):
+            p_matrix = p
+        else:
+            p_matrix = Matrix(p)
+            if p_matrix.shape[1] != R_array[0].shape[0]:
+                p_matrix = p_matrix.T
+
+        R_line = []
+        for r in cron_R:
+            if p_matrix.shape[1] != r.shape[0]:
+                raise ValueError(f"Matrix shape mismatch at P{idx}: {p_matrix.shape} vs {r.shape}")
+            R_line.append(p_matrix.multiply(r))
+
+        # Accumulate results
         if idx != 0:
             for idw, w in enumerate(W):
                 for r in R_line:
                     if w.shape == r.shape:
                         W[idw] += r
 
-        if idx + 1 != len(P_matrix_array):
+        # Prepare next iteration
+        if idx + 1 < len(P_matrix_array):
             before_del_cron_X = __truncated_maps_tensor_product(
                 before_del_cron_X,
                 X_array,
